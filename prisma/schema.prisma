@@ -1,0 +1,212 @@
+// This is your Prisma schema file
+// Based on the Hotel Booking System design documentation
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ==========================================
+// HOTEL
+// ==========================================
+model Hotel {
+  id              String   @id @default(uuid())
+  name            String
+  description     String?  @db.Text
+  address         String?
+  city            String
+  state           String?
+  country         String
+  postalCode      String?  @map("postal_code")
+  latitude        Decimal? @db.Decimal(10, 8)
+  longitude       Decimal? @db.Decimal(11, 8)
+  starRating      Int?     @map("star_rating") @db.SmallInt
+  phone           String?
+  email           String?
+  checkInTime     String?  @default("15:00") @map("check_in_time")
+  checkOutTime    String?  @default("11:00") @map("check_out_time")
+  policies        Json?
+  images          Json?
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  roomTypes       RoomType[]
+  reservations    Reservation[]
+  inventories     RoomTypeInventory[]
+  prices          RoomPrice[]
+
+  @@index([city])
+  @@index([country])
+  @@index([starRating])
+  @@map("hotel")
+}
+
+// ==========================================
+// ROOM TYPE
+// ==========================================
+model RoomType {
+  id            String   @id @default(uuid())
+  hotelId       String   @map("hotel_id")
+  name          String
+  description   String?  @db.Text
+  sizeSqft      Int?     @map("size_sqft")
+  maxOccupancy  Int      @map("max_occupancy") @db.SmallInt
+  bedType       String?  @map("bed_type")
+  viewType      String?  @map("view_type")
+  baseInventory Int      @default(0) @map("base_inventory")
+  images        Json?
+  amenities     Json?
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  hotel         Hotel              @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  inventories   RoomTypeInventory[]
+  prices        RoomPrice[]
+  reservations  Reservation[]
+
+  @@index([hotelId])
+  @@index([isActive])
+  @@map("room_type")
+}
+
+// ==========================================
+// ROOM TYPE INVENTORY ⭐ CORE TABLE
+// ==========================================
+model RoomTypeInventory {
+  hotelId        String   @map("hotel_id")
+  roomTypeId     String   @map("room_type_id")
+  date           DateTime @db.Date
+  totalInventory Int      @map("total_inventory")
+  totalReserved  Int      @default(0) @map("total_reserved")
+  version        Int      @default(1)
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  hotel    Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  roomType RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+
+  @@id([hotelId, roomTypeId, date])
+  @@index([hotelId, roomTypeId, date])
+  @@index([date])
+  @@map("room_type_inventory")
+}
+
+// ==========================================
+// ROOM PRICE
+// ==========================================
+model RoomPrice {
+  id         String   @id @default(uuid())
+  hotelId    String   @map("hotel_id")
+  roomTypeId String   @map("room_type_id")
+  date       DateTime @db.Date
+  price      Decimal  @db.Decimal(10, 2)
+  currency   String   @default("USD") @db.Char(3)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  hotel    Hotel    @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  roomType RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([hotelId, roomTypeId, date])
+  @@index([hotelId, roomTypeId, date])
+  @@index([date])
+  @@map("room_price")
+}
+
+// ==========================================
+// GUEST
+// ==========================================
+model Guest {
+  id            String   @id @default(uuid())
+  userAccountId String?  @map("user_account_id")
+  firstName     String   @map("first_name")
+  lastName      String   @map("last_name")
+  email         String   @unique
+  phone         String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  reservations Reservation[]
+
+  @@index([email])
+  @@index([userAccountId])
+  @@map("guest")
+}
+
+// ==========================================
+// RESERVATION ⭐ CORE TABLE
+// ==========================================
+enum ReservationStatus {
+  PENDING
+  PAID
+  CANCELLED
+  REFUNDED
+  REJECTED
+}
+
+model Reservation {
+  id              String            @id @default(uuid())
+  guestId         String            @map("guest_id")
+  hotelId         String            @map("hotel_id")
+  roomTypeId      String            @map("room_type_id")
+  checkInDate     DateTime          @map("check_in_date") @db.Date
+  checkOutDate    DateTime          @map("check_out_date") @db.Date
+  numberOfRooms   Int               @map("number_of_rooms")
+  status          ReservationStatus @default(PENDING)
+  totalPrice      Decimal           @map("total_price") @db.Decimal(10, 2)
+  currency        String            @default("USD") @db.Char(3)
+  specialRequests String?           @map("special_requests") @db.Text
+  idempotencyKey  String?           @unique @map("idempotency_key")
+  expiresAt       DateTime?         @map("expires_at")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  cancelledAt     DateTime?         @map("cancelled_at")
+
+  guest    Guest    @relation(fields: [guestId], references: [id])
+  hotel    Hotel    @relation(fields: [hotelId], references: [id])
+  roomType RoomType @relation(fields: [roomTypeId], references: [id])
+  payments Payment[]
+
+  @@index([guestId])
+  @@index([hotelId])
+  @@index([status])
+  @@index([checkInDate, checkOutDate])
+  @@index([createdAt])
+  @@index([idempotencyKey])
+  @@map("reservation")
+}
+
+// ==========================================
+// PAYMENT
+// ==========================================
+enum PaymentStatus {
+  INITIATED
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+model Payment {
+  id                    String        @id @default(uuid())
+  reservationId         String        @map("reservation_id")
+  amount                Decimal       @db.Decimal(10, 2)
+  currency              String        @default("USD") @db.Char(3)
+  status                PaymentStatus @default(INITIATED)
+  paymentMethod         String?       @map("payment_method")
+  paymentProvider       String?       @map("payment_provider")
+  providerTransactionId String?       @map("provider_transaction_id")
+  failureReason         String?       @map("failure_reason") @db.Text
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
+
+  reservation Reservation @relation(fields: [reservationId], references: [id])
+
+  @@index([reservationId])
+  @@index([providerTransactionId])
+  @@index([status])
+  @@map("payment")
+}

@@ -6,6 +6,8 @@ export const metadata: Metadata = {
   description: "Book your perfect hotel stay",
 };
 
+import Navigation from '@/components/Navigation'
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -14,6 +16,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased">
+        <Navigation />
         {children}
       </body>
     </html>
